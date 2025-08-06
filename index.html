@@ -1,0 +1,179 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>VIBES Management System</title>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #1a1a1a;
+            color: #f2f2f2;
+            padding: 20px;
+            margin: 0;
+        }
+
+        h1 {
+            text-align: center;
+            color: #00ff99;
+        }
+
+        .rooms {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            justify-content: center;
+        }
+
+        .room {
+            border: 2px solid #ccc;
+            border-radius: 10px;
+            padding: 15px;
+            width: 250px;
+            background: #2c2c2c;
+        }
+
+        .available {
+            border-color: #00cc66;
+            box-shadow: 0 0 10px #00ff66;
+        }
+
+        .occupied {
+            border-color: #cc0000;
+            box-shadow: 0 0 10px #ff0000;
+        }
+
+        button {
+            padding: 10px;
+            background: #00cc66;
+            border: none;
+            color: white;
+            margin: 5px 0;
+            cursor: pointer;
+            width: 100%;
+            border-radius: 5px;
+        }
+
+        select, input {
+            width: 100%;
+            padding: 8px;
+            margin-top: 5px;
+            margin-bottom: 10px;
+            border-radius: 5px;
+            border: none;
+        }
+
+        a {
+            color: #00ccff;
+            text-align: center;
+            display: block;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <header style="background:#111;padding:15px 20px;display:flex;justify-content:space-between;align-items:center;">
+        <h2 style="color:#00ff99;margin:0;">VIBES System</h2>
+        <nav>
+            <a href="menu.html" style="color:#00ccff;margin-right:15px;text-decoration:none;">Menu</a>
+            <a href="report.html" style="color:#00ccff;text-decoration:none;">Report</a>
+        </nav>
+    </header>
+
+    <h1>VIBES Management System</h1>
+
+    <div class="rooms" id="rooms"></div>
+
+    <a href="report.html">Go to Reservation Report</a>
+
+    <script>
+        const roomsContainer = document.getElementById('rooms');
+        const roomData = Array.from({ length: 10 }, (_, i) => ({
+            id: i + 1,
+            status: 'available',
+            startTime: null,
+            pricePerHour: { single: 50, multi: 70 },
+            mode: 'single'
+        }));
+
+        function renderRooms() {
+            roomsContainer.innerHTML = '';
+            roomData.forEach(room => {
+                const div = document.createElement('div');
+                div.className = `room ${room.status === 'available' ? 'available' : 'occupied'}`;
+                div.innerHTML = `
+                            <h3>Room ${room.id}</h3>
+                            <label>Mode:</label>
+                            <select id="mode-${room.id}" ${room.status === 'occupied' ? 'disabled' : ''}>
+                                <option value="single" ${room.mode === 'single' ? 'selected' : ''}>Single - 50 EGP</option>
+                                <option value="multi" ${room.mode === 'multi' ? 'selected' : ''}>Multiplayer - 70 EGP</option>
+                            </select>
+
+                            <label>Reserve (minutes):</label>
+                            <input type="number" id="duration-${room.id}" placeholder="e.g. 60" ${room.status === 'occupied' ? 'disabled' : ''} />
+
+                            <button onclick="startSession(${room.id})" ${room.status === 'occupied' ? 'disabled' : ''}>Start</button>
+                            <button onclick="endSession(${room.id})" ${room.status === 'available' ? 'disabled' : ''}>End</button>
+                        `;
+                roomsContainer.appendChild(div);
+            });
+        }
+
+        function startSession(id) {
+            const room = roomData.find(r => r.id === id);
+            if (room.status === 'occupied') {
+                alert(`Room ${id} is already occupied.`);
+                return;
+            }
+
+            const modeSelect = document.getElementById(`mode-${id}`);
+            const durationInput = document.getElementById(`duration-${id}`);
+
+            const mode = modeSelect.value;
+            const minutes = parseInt(durationInput.value) || 60;
+
+            room.status = 'occupied';
+            room.startTime = Date.now();
+            room.mode = mode;
+            room.duration = minutes;
+
+            renderRooms();
+        }
+
+        function endSession(id) {
+            const room = roomData.find(r => r.id === id);
+            if (room.status === 'available') {
+                alert(`Room ${id} is not in use.`);
+                return;
+            }
+
+            const endTime = Date.now();
+            const elapsedMs = endTime - room.startTime;
+            const elapsedMin = Math.ceil(elapsedMs / 60000);
+            const hourlyRate = room.pricePerHour[room.mode];
+            const price = Math.ceil((elapsedMin / 60) * hourlyRate);
+
+            alert(`Room ${id} used for ${elapsedMin} minutes. Charge: ${price} EGP`);
+
+            const history = JSON.parse(localStorage.getItem('ps_history') || '[]');
+            history.push({
+                room: room.id,
+                mode: room.mode,
+                duration: elapsedMin,
+                price,
+                start: new Date(room.startTime).toLocaleTimeString(),
+                end: new Date(endTime).toLocaleTimeString()
+            });
+            localStorage.setItem('ps_history', JSON.stringify(history));
+
+            room.status = 'available';
+            room.startTime = null;
+
+            renderRooms();
+        }
+
+        renderRooms();
+    </script>
+</body>
+</html>

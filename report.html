@@ -1,0 +1,236 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Reservation Report</title>
+    <style>
+        body {
+            background: #111;
+            color: #eee;
+            font-family: Arial;
+            padding: 20px;
+        }
+
+        h1 {
+            text-align: center;
+            color: #00ccff;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+
+        th, td {
+            border: 1px solid #555;
+            padding: 10px;
+            text-align: center;
+            vertical-align: top;
+        }
+
+        th {
+            background: #222;
+        }
+
+        .total {
+            margin-top: 20px;
+            font-size: 20px;
+            text-align: center;
+            color: #00ff88;
+        }
+
+        button {
+            margin-top: 20px;
+            padding: 10px;
+            background: #cc0000;
+            color: white;
+            border: none;
+            cursor: pointer;
+            border-radius: 5px;
+            display: block;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        a {
+            color: #00ccff;
+            display: block;
+            text-align: center;
+            margin-top: 15px;
+        }
+
+        .orders-list {
+            text-align: left;
+        }
+    </style>
+</head>
+<body>
+    <h1>Reservation Report</h1>
+    <table>
+        <thead>
+            <tr>
+                <th>Type</th>
+                <th>Room/Table</th>
+                <th>Mode</th>
+                <th>Start</th>
+                <th>End</th>
+                <th>Duration (min)</th>
+                <th>Price (EGP)</th>
+                <th>Orders</th>
+                <th>Date</th>
+            </tr>
+        </thead>
+        <tbody id="report-body"></tbody>
+    </table>
+
+    <div class="total" id="total"></div>
+
+    <button onclick="clearHistory()">Clear All Data</button>
+    <button onclick="exportToExcel()">Export to Excel</button>
+
+    <a href="playstationsystem.html">← Back to Main Page</a>
+
+    <script>
+        function parseOrderPrice(orderStr) {
+            const match = orderStr.match(/\((\d+(\.\d+)?) EGP\)$/);
+            return match ? parseFloat(match[1]) : 0;
+        }
+
+        function renderOrdersList(orders) {
+            if (!orders || orders.length === 0) return "-";
+            return orders.map(o => {
+                if (typeof o === "string") return o;
+                if (o.name) return `${o.name} x${o.qty} (${o.pricePerUnit * o.qty} EGP)`;
+                return JSON.stringify(o);
+            }).join('<br>');
+        }
+
+        const psData = JSON.parse(localStorage.getItem('ps_history') || '[]');
+        const menuData = JSON.parse(localStorage.getItem('menu_orders') || '[]');
+
+        const tbody = document.getElementById('report-body');
+        let totalRevenue = 0;
+        const usedMenuIndexes = new Set();
+
+        const mergedRows = [];
+
+        psData.forEach(session => {
+            if (parseInt(session.session) !== 1) {
+                // Not session 1, skip merging logic
+                mergedRows.push({
+                    type: "Playstation Session",
+                    room: session.room,
+                    mode: session.mode,
+                    start: session.start,
+                    end: session.end,
+                    duration: session.duration,
+                    price: session.price || 0,
+                    orders: [],
+                    date: "-"
+                });
+                totalRevenue += session.price || 0;
+                return;
+            }
+
+            const room = parseInt(session.room);
+            let mergedOrders = [];
+            let ordersTotal = 0;
+
+            menuData.forEach((order, index) => {
+                if (usedMenuIndexes.has(index)) return;
+
+                if (!order.delivery) return;
+
+                const match = order.delivery.match(/\d+/);
+                if (!match) return;
+
+                const orderRoom = parseInt(match[0]);
+                if (orderRoom === room) {
+                    mergedOrders.push(...order.items);
+                    ordersTotal += order.totalPrice || 0;
+                    usedMenuIndexes.add(index);
+                }
+            });
+
+            const fullPrice = (session.price || 0) + ordersTotal;
+            totalRevenue += fullPrice;
+
+            mergedRows.push({
+                type: "Merged Session + Orders",
+                room: session.room,
+                mode: session.mode,
+                start: session.start,
+                end: session.end,
+                duration: session.duration,
+                price: fullPrice,
+                orders: mergedOrders,
+                date: "-"
+            });
+        });
+
+        // Add unmerged menu orders
+        menuData.forEach((order, index) => {
+            if (usedMenuIndexes.has(index)) return;
+
+            totalRevenue += order.totalPrice || 0;
+
+            mergedRows.push({
+                type: "Menu Order",
+                room: order.delivery || "-",
+                mode: "-",
+                start: "-",
+                end: "-",
+                duration: "-",
+                price: order.totalPrice || 0,
+                orders: order.items,
+                date: order.date || "-"
+            });
+        });
+
+        // Render the rows
+        mergedRows.forEach(row => {
+            const ordersText = renderOrdersList(row.orders);
+            const html = `<tr>
+                <td>${row.type}</td>
+                <td>${row.room}</td>
+                <td>${row.mode}</td>
+                <td>${row.start}</td>
+                <td>${row.end}</td>
+                <td>${row.duration}</td>
+                <td>${row.price}</td>
+                <td class="orders-list">${ordersText}</td>
+                <td>${row.date}</td>
+            </tr>`;
+            tbody.innerHTML += html;
+        });
+
+        document.getElementById('total').innerText = `Total Revenue: ${totalRevenue} EGP`;
+
+        function clearHistory() {
+            if (confirm('Clear all playstation sessions and menu orders?')) {
+                localStorage.removeItem('ps_history');
+                localStorage.removeItem('menu_orders');
+                location.reload();
+            }
+        }
+
+        function exportToExcel() {
+            const table = document.querySelector("table").outerHTML;
+            const filename = `reservation_report_${new Date().toLocaleDateString().replace(/\//g, '-')}.xls`;
+            const dataType = 'application/vnd.ms-excel';
+            const blob = new Blob(['\ufeff', table], { type: dataType });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+    </script>
+
+
+</body>
+</html>

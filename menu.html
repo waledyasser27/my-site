@@ -1,0 +1,306 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Menu Order System</title>
+    <style>
+        body {
+            font-family: Arial;
+            background: #121212;
+            color: #eee;
+            padding: 30px;
+            max-width: 650px;
+            margin: auto;
+        }
+
+        h2 {
+            text-align: center;
+            color: #00cc99;
+            margin-bottom: 25px;
+        }
+
+        form {
+            background: #1f1f1f;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 8px #00cc99;
+        }
+
+        .menu-item {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 12px;
+        }
+
+            .menu-item label {
+                flex: 1;
+            }
+
+            .menu-item input[type="number"] {
+                width: 60px;
+                background: #2b2b2b;
+                border: none;
+                color: #eee;
+                border-radius: 4px;
+                padding: 5px;
+                text-align: center;
+            }
+
+        .delivery-options {
+            margin: 20px 0 10px;
+        }
+
+            .delivery-options label {
+                margin-right: 20px;
+                cursor: pointer;
+            }
+
+        select {
+            width: 100%;
+            padding: 8px;
+            border-radius: 5px;
+            border: none;
+            background: #2b2b2b;
+            color: #eee;
+            margin-top: 6px;
+            margin-bottom: 15px;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .cart {
+            background: #272727;
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 6px;
+        }
+
+            .cart h3 {
+                margin-top: 0;
+            }
+
+        .cart-items {
+            margin-bottom: 10px;
+        }
+
+        .cart-total {
+            font-weight: bold;
+            font-size: 1.1em;
+            text-align: right;
+        }
+
+        button {
+            margin-top: 20px;
+            background: #00cc99;
+            border: none;
+            color: #111;
+            padding: 12px 20px;
+            font-weight: bold;
+            width: 100%;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background 0.3s ease;
+        }
+
+            button:hover {
+                background: #009966;
+                color: white;
+            }
+    </style>
+</head>
+<body>
+
+    <h2>Menu Order System</h2>
+
+    <form id="orderForm">
+        <div id="menuList"></div>
+
+        <label>Delivery To:</label>
+        <div class="delivery-options">
+            <label><input type="radio" name="delivery" value="table" required /> Table</label>
+            <label><input type="radio" name="delivery" value="room" /> Room</label>
+            <label><input type="radio" name="delivery" value="takeaway" /> Takeaway</label>
+        </div>
+
+        <div id="tableSelect" class="hidden">
+            <label>Select Table (1–30):</label>
+            <select id="tableNumber">
+                <option value="">Select Table</option>
+            </select>
+        </div>
+
+        <div id="roomSelect" class="hidden">
+            <label>Select Room (1–10):</label>
+            <select id="roomNumber">
+                <option value="">Select Room</option>
+            </select>
+        </div>
+
+        <div class="cart">
+            <h3>Order Summary</h3>
+            <div id="cartItems" class="cart-items">No items selected.</div>
+            <div class="cart-total" id="cartTotal">Total: 0 EGP</div>
+        </div>
+
+        <button type="submit">Add Order</button>
+    </form>
+
+    <script>
+        const menuItems = [
+            { name: "Tea", price: 15 },
+            { name: "Coffee", price: 25 },
+            { name: "Pepsi", price: 20 },
+            { name: "LATTE", price: 23 },
+
+        ];
+
+        const menuList = document.getElementById('menuList');
+        const cartItemsDiv = document.getElementById('cartItems');
+        const cartTotalDiv = document.getElementById('cartTotal');
+        const tableSelect = document.getElementById('tableNumber');
+        const roomSelect = document.getElementById('roomNumber');
+        const deliveryRadios = document.querySelectorAll('input[name="delivery"]');
+        const tableDiv = document.getElementById('tableSelect');
+        const roomDiv = document.getElementById('roomSelect');
+        const form = document.getElementById('orderForm');
+
+        // Generate menu inputs dynamically
+        menuItems.forEach((item, i) => {
+            const div = document.createElement('div');
+            div.className = 'menu-item';
+            div.innerHTML = `
+                  <label for="qty-${i}">${item.name} (${item.price} EGP)</label>
+                  <input type="number" min="0" value="0" id="qty-${i}" data-price="${item.price}" />
+                `;
+            menuList.appendChild(div);
+        });
+
+        // Populate tables and rooms dropdowns
+        for (let i = 1; i <= 30; i++) {
+            const opt = document.createElement('option');
+            opt.value = i;
+            opt.textContent = `Table ${i}`;
+            tableSelect.appendChild(opt);
+        }
+        for (let i = 1; i <= 10; i++) {
+            const opt = document.createElement('option');
+            opt.value = i;
+            opt.textContent = ` ${i}`;
+            roomSelect.appendChild(opt);
+        }
+
+        // Show/hide dropdowns based on delivery type
+        deliveryRadios.forEach(radio => {
+            radio.addEventListener('change', () => {
+                if (radio.value === 'table') {
+                    tableDiv.classList.remove('hidden');
+                    roomDiv.classList.add('hidden');
+                } else if (radio.value === 'room') {
+                    roomDiv.classList.remove('hidden');
+                    tableDiv.classList.add('hidden');
+                } else {
+                    tableDiv.classList.add('hidden');
+                    roomDiv.classList.add('hidden');
+                }
+            });
+        });
+
+        // Update cart summary on quantity change
+        menuList.addEventListener('input', updateCart);
+
+        function updateCart() {
+            const inputs = menuList.querySelectorAll('input[type="number"]');
+            let total = 0;
+            let selected = [];
+
+            inputs.forEach(input => {
+                const qty = parseInt(input.value) || 0;
+                if (qty > 0) {
+                    const price = parseInt(input.dataset.price);
+                    const name = input.previousElementSibling.textContent.split(' (')[0];
+                    selected.push(`${name} x${qty} (${price * qty} EGP)`);
+                    total += price * qty;
+                }
+            });
+
+            cartItemsDiv.innerHTML = selected.length ? selected.join('<br>') : 'No items selected.';
+            cartTotalDiv.textContent = `Total: ${total} EGP`;
+        }
+
+        const orders = JSON.parse(localStorage.getItem('menu_orders') || '[]');
+        let orderId = orders.length ? Math.max(...orders.map(o => o.id)) + 1 : 1;
+
+        form.addEventListener('submit', e => {
+            e.preventDefault();
+
+            const inputs = menuList.querySelectorAll('input[type="number"]');
+            let selectedItems = [];
+            let totalPrice = 0;
+
+            inputs.forEach(input => {
+                const qty = parseInt(input.value) || 0;
+                if (qty > 0) {
+                    const price = parseInt(input.dataset.price);
+                    const name = input.previousElementSibling.textContent.split(' (')[0];
+                    selectedItems.push({ name, qty, pricePerUnit: price });
+                    totalPrice += price * qty;
+                }
+            });
+
+            if (!selectedItems.length) {
+                alert('Please select at least one menu item.');
+                return;
+            }
+
+            const deliveryType = document.querySelector('input[name="delivery"]:checked');
+            if (!deliveryType) {
+                alert('Please select delivery type.');
+                return;
+            }
+
+            let delivery = '';
+            if (deliveryType.value === 'table') {
+                const tableNum = tableSelect.value;
+                if (!tableNum) {
+                    alert('Please select a table.');
+                    return;
+                }
+                delivery = `Table ${tableNum}`;
+            } else if (deliveryType.value === 'room') {
+                const roomNum = roomSelect.value;
+                if (!roomNum) {
+                    alert('Please select a room.');
+                    return;
+                }
+                delivery = `Room ${roomNum}`;
+            } else {
+                delivery = 'Takeaway';
+            }
+
+            const now = new Date();
+            const formattedDate = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ' ' + now.toLocaleDateString();
+
+            const order = {
+                id: orderId++,
+                items: selectedItems,
+                totalPrice,
+                date: formattedDate,
+                delivery
+            };
+
+            orders.push(order);
+            localStorage.setItem('menu_orders', JSON.stringify(orders));
+
+            alert('Order added successfully.');
+
+            form.reset();
+            updateCart();
+            tableDiv.classList.add('hidden');
+            roomDiv.classList.add('hidden');
+        });
+    </script>
+</body>
+</html>
